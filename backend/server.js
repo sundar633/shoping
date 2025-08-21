@@ -1,77 +1,42 @@
-const express = require("express");
-const fs = require("fs");
-const path = require("path");
-const cors = require("cors");
-const bodyParser = require("body-parser");
+import express from "express";
+import cors from "cors";
 
 const app = express();
-const PORT = process.env.PORT || 5000;
-
-// Middleware
 app.use(cors());
-app.use(bodyParser.json());
+app.use(express.json());
 
-// Path to orders.json
-const ordersFile = path.join(__dirname, "orders.json");
+let orders = []; // in-memory (resets when server restarts)
 
-// Ensure orders.json exists
-if (!fs.existsSync(ordersFile)) {
-  fs.writeFileSync(ordersFile, "[]");
-}
-
-// 📌 Get all orders
-app.get("/api/orders", (req, res) => {
-  fs.readFile(ordersFile, "utf8", (err, data) => {
-    if (err) return res.status(500).json({ error: "Failed to read orders" });
-    res.json(JSON.parse(data));
-  });
+// ✅ Root check
+app.get("/", (req, res) => {
+  res.send("Backend is running ✅. Use /orders to fetch data.");
 });
 
-// 📌 Add new order
-app.post("/api/orders", (req, res) => {
-  const newOrder = req.body;
-
-  fs.readFile(ordersFile, "utf8", (err, data) => {
-    if (err) return res.status(500).json({ error: "Failed to read orders" });
-
-    let orders = [];
-    try {
-      orders = JSON.parse(data);
-    } catch (e) {
-      orders = [];
-    }
-
-    orders.push(newOrder);
-
-    fs.writeFile(ordersFile, JSON.stringify(orders, null, 2), (err) => {
-      if (err) return res.status(500).json({ error: "Failed to save order" });
-      res.json({ message: "✅ Order saved successfully!" });
-    });
-  });
+// ✅ Get all orders
+app.get("/orders", (req, res) => {
+  res.json(orders);
 });
 
-// 📌 Delete an order by index
-app.delete("/api/orders/:index", (req, res) => {
-  const orderIndex = parseInt(req.params.index);
-
-  fs.readFile(ordersFile, "utf8", (err, data) => {
-    if (err) return res.status(500).json({ error: "Failed to read orders" });
-
-    let orders = JSON.parse(data);
-    if (orderIndex >= 0 && orderIndex < orders.length) {
-      orders.splice(orderIndex, 1);
-
-      fs.writeFile(ordersFile, JSON.stringify(orders, null, 2), (err) => {
-        if (err) return res.status(500).json({ error: "Failed to delete order" });
-        res.json({ message: "✅ Order deleted successfully!" });
-      });
-    } else {
-      res.status(404).json({ error: "Order not found" });
-    }
-  });
+// ✅ Place new order
+app.post("/orders", (req, res) => {
+  const order = { ...req.body, _id: Date.now().toString() };
+  orders.push(order);
+  res.json(order);
 });
 
-// Start server
-app.listen(PORT, () => {
-  console.log(`🚀 Server running on port ${PORT}`);
+// ✅ Mark product as delivered
+app.patch("/orders/:id/deliver", (req, res) => {
+  const { id } = req.params;
+  const { itemName } = req.body;
+
+  const order = orders.find(o => o._id === id);
+  if (!order) return res.status(404).send("Order not found");
+
+  // remove only the delivered product
+  order.items = order.items.filter(i => i.name !== itemName);
+
+  res.json(order);
 });
+
+const PORT = process.env.PORT || 10000;
+app.listen(PORT, () => console.log(`✅ Backend running on port ${PORT}`));
